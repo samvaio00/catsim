@@ -6,7 +6,6 @@
     "directory": "./out",
     "not_found_handling": "single-page-application"
   },
-  // Optional Cloudflare path: set next.config output to "export", then `npm run deploy:cf`.
   "observability": {
     "enabled": true
   }
