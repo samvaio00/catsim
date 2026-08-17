@@ -21,3 +21,19 @@ Next.js, React Three Fiber, Rapier physics, Zustand, Web Audio (synthesized cat 
 npm install
 npm run dev
 ```
+
+## Deploy
+
+Vercel is the better host for this Next.js app (global CDN, zero config). Cloudflare Workers is a fine fallback for a static export.
+
+```bash
+npx vercel login
+npm run deploy
+```
+
+Cloudflare:
+
+```bash
+npx wrangler login
+npm run deploy:cf
+```

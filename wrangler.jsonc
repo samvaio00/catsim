@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pura-cat-trainer",
+  "compatibility_date": "2026-08-17",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "single-page-application"
+  },
+  // Optional Cloudflare path: set next.config output to "export", then `npm run deploy:cf`.
+  "observability": {
+    "enabled": true
+  }
+}
