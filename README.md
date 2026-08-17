@@ -1,0 +1,1 @@
+# catsima web app.  a realistic cat simulator featuring a singapora cat in a normal living room.  the cat should respond to moods, bodily needs, hunger, boredom, voice commands and text commands.  the interaction should be realistic with real physics.
