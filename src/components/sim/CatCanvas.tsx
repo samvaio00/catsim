@@ -28,7 +28,7 @@ export function CatCanvas() {
       <Canvas
         shadows
         dpr={[1, 1.6]}
-        camera={{ position: [4.2, 3.1, 4.6], fov: 46, near: 0.1, far: 40 }}
+        camera={{ position: [0.2, 1.7, -2.45], fov: 50, near: 0.08, far: 30 }}
         onCreated={({ gl }) => {
           gl.setClearColor("#7fa0c4", 1);
           gl.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault(), false);

@@ -6,7 +6,7 @@ import * as THREE from "three";
 import type { GrabId } from "@/lib/sim/grab";
 import { useSim } from "@/lib/sim/store";
 import { sounds } from "@/lib/sim/sounds";
-import { touchCamera } from "@/lib/sim/touchCamera";
+import { ROOM_VIEW, touchCamera } from "@/lib/sim/touchCamera";
 import { clampToRoom } from "@/lib/sim/world";
 
 type PointerInfo = {
@@ -188,13 +188,16 @@ export function TouchController() {
       if (pointers.size === 2 && !held) {
         const now = pinch();
         if (pinchStart > 0) {
-          touchCamera.dist = Math.min(7.2, Math.max(2.4, distStart * (pinchStart / Math.max(40, now))));
+          touchCamera.dist = Math.min(
+          ROOM_VIEW.maxDist,
+          Math.max(ROOM_VIEW.minDist, distStart * (pinchStart / Math.max(40, now))),
+        );
         }
         return;
       }
       if (orbiting && pointers.size === 1) {
         touchCamera.az -= dx * 0.005;
-        touchCamera.pol = Math.min(1.25, Math.max(0.35, touchCamera.pol + dy * 0.004));
+        touchCamera.pol = Math.min(1.28, Math.max(0.72, touchCamera.pol + dy * 0.004));
       }
       if (useSim.getState().playSession && pointers.size === 1 && prev.floor) {
         useSim.getState().setPrey(projectFloor(e.clientX, e.clientY, 0.05));
