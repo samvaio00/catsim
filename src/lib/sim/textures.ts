@@ -256,6 +256,33 @@ export function singapuraCoatTexture() {
   return tex;
 }
 
+/** Fine strand alpha map for fur shells: white tapered strokes on black. */
+export function furStrandTexture() {
+  const key = "furStrands";
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const { canvas, ctx } = makeCanvas(256, 256);
+  const rand = rng(123);
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 1500; i++) {
+    const x = rand() * 256;
+    const y = rand() * 256;
+    const len = 3 + rand() * 7;
+    const a = rand() * Math.PI * 2;
+    const v = 120 + Math.floor(rand() * 135);
+    ctx.strokeStyle = `rgba(${v},${v},${v},${0.5 + rand() * 0.5})`;
+    ctx.lineWidth = 0.7 + rand() * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+    ctx.stroke();
+  }
+  const tex = toTexture(canvas, 6, 6);
+  cache.set(key, tex);
+  return tex;
+}
+
 export function artTexture(variant: "leaves" | "sunset") {
   const key = `art:${variant}`;
   const hit = cache.get(key);

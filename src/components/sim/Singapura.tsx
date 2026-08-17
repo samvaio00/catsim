@@ -2,12 +2,13 @@
 
 import { useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
+import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { clamp, dist2, lerp } from "@/lib/utils";
 import { useSim } from "@/lib/sim/store";
 import { sounds } from "@/lib/sim/sounds";
 import { onRug, resolveMove, surfaceAt } from "@/lib/sim/world";
-import { singapuraCoatTexture } from "@/lib/sim/textures";
+import { furStrandTexture } from "@/lib/sim/textures";
 import type { Behavior } from "@/lib/sim/types";
 
 /** Pose offsets: how high the root floats and how far the legs fold. */
@@ -40,6 +41,55 @@ function smoothAngle(current: number, target: number, t: number) {
   return current + delta * t;
 }
 
+/** Sculpted body: one smooth lathe surface from rump to neck. */
+function bodyGeometry() {
+  const profile: [number, number][] = [
+    [0.015, 0],
+    [0.085, 0.02],
+    [0.132, 0.07],
+    [0.146, 0.13], // hips
+    [0.124, 0.2], // waist
+    [0.116, 0.27], // ribcage
+    [0.11, 0.32], // chest
+    [0.084, 0.36], // shoulder taper
+    [0.056, 0.385], // neck
+    [0.018, 0.4],
+  ];
+  const pts = profile.map(([r, y]) => new THREE.Vector2(r, y));
+  const geo = new THREE.LatheGeometry(pts, 28);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+interface FurMats {
+  base: THREE.Material;
+  shells: THREE.Material[];
+}
+
+/** A body part: solid coat plus inflated alpha-strand shells for a furry rim. */
+function FurPart({
+  geometry,
+  mats,
+  position,
+  rotation,
+  scale,
+}: {
+  geometry: THREE.BufferGeometry;
+  mats: FurMats;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number] | number;
+}) {
+  return (
+    <group position={position} rotation={rotation} scale={scale ?? 1}>
+      <mesh geometry={geometry} material={mats.base} castShadow />
+      {mats.shells.map((m, i) => (
+        <mesh key={i} geometry={geometry} material={m} scale={1 + (i + 1) * 0.016} />
+      ))}
+    </group>
+  );
+}
+
 export function Singapura() {
   const root = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
@@ -55,19 +105,51 @@ export function Singapura() {
   const lb = useRef<THREE.Group>(null);
   const rb = useRef<THREE.Group>(null);
 
-  const coat = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        map: singapuraCoatTexture(),
-        color: "#cbb28a",
-        roughness: 0.82,
-        metalness: 0,
-        sheen: 0.65,
-        sheenColor: new THREE.Color("#ecd9ae"),
-        sheenRoughness: 0.55,
-      }),
+  const [coatTex, irisTex] = useTexture(["/textures/coat_tiled.jpg", "/textures/iris.jpg"]);
+
+  const fur = useMemo<FurMats>(() => {
+    coatTex.colorSpace = THREE.SRGBColorSpace;
+    coatTex.wrapS = THREE.RepeatWrapping;
+    coatTex.wrapT = THREE.RepeatWrapping;
+    coatTex.repeat.set(2.2, 1.6);
+    coatTex.anisotropy = 8;
+    const strand = furStrandTexture();
+    const base = new THREE.MeshPhysicalMaterial({
+      map: coatTex,
+      color: "#e2cfa8",
+      roughness: 0.88,
+      metalness: 0,
+      sheen: 0.5,
+      sheenColor: new THREE.Color("#e8d2a8"),
+      sheenRoughness: 0.6,
+    });
+    const shells = [0, 1, 2].map(
+      (i) =>
+        new THREE.MeshStandardMaterial({
+          map: coatTex,
+          alphaMap: strand,
+          transparent: true,
+          depthWrite: false,
+          opacity: 0.5 - i * 0.13,
+          alphaTest: 0.06,
+          roughness: 0.98,
+        }),
+    );
+    return { base, shells };
+  }, [coatTex]);
+
+  const geos = useMemo(
+    () => ({
+      body: bodyGeometry(),
+      head: new THREE.SphereGeometry(0.084, 28, 22),
+      muzzle: new THREE.SphereGeometry(0.046, 18, 14),
+      thigh: new THREE.SphereGeometry(0.052, 16, 12),
+      tailSegA: new THREE.CapsuleGeometry(0.021, 0.1, 4, 10),
+      tailSegB: new THREE.CapsuleGeometry(0.015, 0.08, 4, 10),
+    }),
     [],
   );
+
   const dark = useMemo(
     () => new THREE.MeshStandardMaterial({ color: "#4a2e1c", roughness: 0.6 }),
     [],
@@ -76,6 +158,15 @@ export function Singapura() {
     () => new THREE.MeshStandardMaterial({ color: "#b97a68", roughness: 0.85 }),
     [],
   );
+  const irisMat = useMemo(() => {
+    irisTex.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshPhysicalMaterial({
+      map: irisTex,
+      roughness: 0.12,
+      clearcoat: 0.9,
+      clearcoatRoughness: 0.15,
+    });
+  }, [irisTex]);
 
   const stepPhase = useRef(0);
   const lastStep = useRef(0);
@@ -251,62 +342,45 @@ export function Singapura() {
   return (
     <group ref={root} position={[-0.4, 0, 0.15]} scale={1.65} userData={{ grabId: "cat" }}>
       <group ref={body}>
-        {/* Hindquarters, torso, chest — overlapping volumes read as one body. */}
-        <mesh castShadow material={coat} position={[0, 0.15, -0.055]} scale={[0.8, 0.84, 1.02]}>
-          <sphereGeometry args={[0.15, 24, 18]} />
-        </mesh>
-        <mesh
-          castShadow
-          material={coat}
-          position={[0, 0.135, 0.03]}
+        {/* Sculpted torso: lathe axis runs rump (rear) to neck (front). */}
+        <FurPart
+          geometry={geos.body}
+          mats={fur}
+          position={[0, 0.135, -0.205]}
           rotation={[Math.PI / 2, 0, 0]}
-          scale={[1, 1, 0.82]}
-        >
-          <capsuleGeometry args={[0.105, 0.2, 6, 18]} />
-        </mesh>
-        <mesh castShadow material={coat} position={[0, 0.135, 0.13]} scale={[0.76, 0.82, 0.95]}>
-          <sphereGeometry args={[0.12, 22, 16]} />
-        </mesh>
-        {/* Neck ruff. */}
-        <mesh castShadow material={coat} position={[0, 0.185, 0.185]} scale={[0.62, 0.72, 0.72]}>
-          <sphereGeometry args={[0.1, 18, 14]} />
-        </mesh>
+          scale={[1, 1, 0.86]}
+        />
       </group>
 
-      <group ref={head} position={[0, 0.235, 0.235]}>
-        <mesh castShadow material={coat} scale={[1, 0.92, 0.94]}>
-          <sphereGeometry args={[0.088, 24, 18]} />
-        </mesh>
-        {/* Muzzle and nose. */}
-        <mesh castShadow material={coat} position={[0, -0.032, 0.062]} scale={[1.2, 0.82, 1]}>
-          <sphereGeometry args={[0.047, 16, 12]} />
-        </mesh>
-        <mesh material={dark} position={[0, -0.014, 0.108]} scale={[1.25, 0.75, 0.7]}>
+      <group ref={head} position={[0, 0.215, 0.225]}>
+        <FurPart geometry={geos.head} mats={fur} scale={[1, 0.92, 0.94]} />
+        {/* Muzzle, nose, chin. */}
+        <FurPart geometry={geos.muzzle} mats={fur} position={[0, -0.03, 0.06]} scale={[1.2, 0.82, 1]} />
+        <mesh material={dark} position={[0, -0.014, 0.104]} scale={[1.25, 0.75, 0.7]}>
           <sphereGeometry args={[0.011, 10, 8]} />
         </mesh>
-        {/* Chin. */}
-        <mesh material={coat} position={[0, -0.058, 0.062]} scale={[0.8, 0.55, 0.9]}>
+        <mesh material={fur.base} position={[0, -0.056, 0.058]} scale={[0.8, 0.55, 0.9]}>
           <sphereGeometry args={[0.03, 12, 10]} />
         </mesh>
 
-        <Eye refEl={eyeL} position={[-0.044, 0.016, 0.068]} />
-        <Eye refEl={eyeR} position={[0.044, 0.016, 0.068]} />
+        <Eye refEl={eyeL} position={[-0.042, 0.014, 0.072]} irisMat={irisMat} side={-1} />
+        <Eye refEl={eyeR} position={[0.042, 0.014, 0.072]} irisMat={irisMat} side={1} />
 
         {/* Singapura ears are large for the head. */}
-        <group ref={earL} position={[-0.052, 0.075, -0.012]} rotation={[0.1, 0, -0.18]}>
-          <mesh castShadow material={coat} scale={[1, 1, 0.45]}>
-            <coneGeometry args={[0.047, 0.105, 12]} />
+        <group ref={earL} position={[-0.054, 0.08, -0.014]} rotation={[0.1, 0, -0.18]}>
+          <mesh castShadow material={fur.base} scale={[1, 1, 0.45]}>
+            <coneGeometry args={[0.05, 0.115, 14]} />
           </mesh>
-          <mesh material={innerEar} position={[0, -0.008, 0.012]} scale={[0.66, 0.72, 0.3]}>
-            <coneGeometry args={[0.047, 0.105, 12]} />
+          <mesh material={innerEar} position={[0, -0.009, 0.013]} scale={[0.66, 0.72, 0.3]}>
+            <coneGeometry args={[0.05, 0.115, 14]} />
           </mesh>
         </group>
-        <group ref={earR} position={[0.052, 0.075, -0.012]} rotation={[0.1, 0, 0.18]}>
-          <mesh castShadow material={coat} scale={[1, 1, 0.45]}>
-            <coneGeometry args={[0.047, 0.105, 12]} />
+        <group ref={earR} position={[0.054, 0.08, -0.014]} rotation={[0.1, 0, 0.18]}>
+          <mesh castShadow material={fur.base} scale={[1, 1, 0.45]}>
+            <coneGeometry args={[0.05, 0.115, 14]} />
           </mesh>
-          <mesh material={innerEar} position={[0, -0.008, 0.012]} scale={[0.66, 0.72, 0.3]}>
-            <coneGeometry args={[0.047, 0.105, 12]} />
+          <mesh material={innerEar} position={[0, -0.009, 0.013]} scale={[0.66, 0.72, 0.3]}>
+            <coneGeometry args={[0.05, 0.115, 14]} />
           </mesh>
         </group>
 
@@ -314,22 +388,18 @@ export function Singapura() {
         <Whiskers side={1} />
       </group>
 
-      <Leg refEl={lf} position={[-0.062, 0.115, 0.115]} material={coat} dark={dark} />
-      <Leg refEl={rf} position={[0.062, 0.115, 0.115]} material={coat} dark={dark} />
-      <Leg refEl={lb} position={[-0.068, 0.125, -0.115]} material={coat} dark={dark} back />
-      <Leg refEl={rb} position={[0.068, 0.125, -0.115]} material={coat} dark={dark} back />
+      <Leg refEl={lf} position={[-0.058, 0.115, 0.125]} material={fur.base} dark={dark} />
+      <Leg refEl={rf} position={[0.058, 0.115, 0.125]} material={fur.base} dark={dark} />
+      <Leg refEl={lb} position={[-0.064, 0.125, -0.125]} material={fur.base} dark={dark} thigh={geos.thigh} back />
+      <Leg refEl={rb} position={[0.064, 0.125, -0.125]} material={fur.base} dark={dark} thigh={geos.thigh} back />
 
       {/* Two-segment tail with a darker tip. */}
-      <group ref={tailA} position={[0, 0.175, -0.19]}>
-        <mesh castShadow material={coat} position={[0, 0.035, -0.055]} rotation={[1.15, 0, 0]}>
-          <capsuleGeometry args={[0.023, 0.1, 4, 10]} />
-        </mesh>
+      <group ref={tailA} position={[0, 0.175, -0.195]}>
+        <FurPart geometry={geos.tailSegA} mats={fur} position={[0, 0.035, -0.055]} rotation={[1.15, 0, 0]} />
         <group ref={tailB} position={[0, 0.075, -0.105]}>
-          <mesh castShadow material={coat} position={[0, 0.03, -0.045]} rotation={[1.1, 0, 0]}>
-            <capsuleGeometry args={[0.017, 0.08, 4, 10]} />
-          </mesh>
+          <FurPart geometry={geos.tailSegB} mats={fur} position={[0, 0.03, -0.045]} rotation={[1.1, 0, 0]} />
           <mesh castShadow material={dark} position={[0, 0.062, -0.085]} rotation={[1.1, 0, 0]}>
-            <capsuleGeometry args={[0.013, 0.045, 4, 8]} />
+            <capsuleGeometry args={[0.012, 0.045, 4, 8]} />
           </mesh>
         </group>
       </group>
@@ -340,34 +410,27 @@ export function Singapura() {
 function Eye({
   refEl,
   position,
+  irisMat,
+  side,
 }: {
   refEl: RefObject<THREE.Group | null>;
   position: [number, number, number];
+  irisMat: THREE.Material;
+  side: 1 | -1;
 }) {
-  const iris = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: "#8f9436",
-        roughness: 0.15,
-        clearcoat: 0.8,
-        emissive: "#3a4012",
-        emissiveIntensity: 0.35,
-      }),
-    [],
-  );
   return (
-    <group ref={refEl} position={position}>
-      {/* Almond eye: flattened iris, slit pupil, catchlight. */}
-      <mesh material={iris} scale={[1, 0.78, 0.5]} rotation={[0, position[0] < 0 ? 0.35 : -0.35, 0]}>
-        <sphereGeometry args={[0.027, 16, 12]} />
+    <group ref={refEl} position={position} rotation={[0, side * -0.32, 0]}>
+      {/* Socket shadow, photoreal iris disc, catchlight. */}
+      <mesh scale={[1, 0.82, 0.5]}>
+        <sphereGeometry args={[0.0285, 18, 14]} />
+        <meshStandardMaterial color="#1a120a" roughness={0.35} />
       </mesh>
-      <mesh position={[0, 0, 0.013]} scale={[0.35, 1, 0.4]}>
-        <sphereGeometry args={[0.012, 10, 10]} />
-        <meshStandardMaterial color="#120c06" roughness={0.25} />
+      <mesh material={irisMat} position={[0, 0, 0.0145]}>
+        <circleGeometry args={[0.0205, 24]} />
       </mesh>
-      <mesh position={[0.007, 0.008, 0.02]}>
-        <sphereGeometry args={[0.005, 8, 8]} />
-        <meshStandardMaterial color="#f3efe4" emissive="#ffffff" emissiveIntensity={0.6} />
+      <mesh position={[0.007, 0.009, 0.019]}>
+        <sphereGeometry args={[0.0045, 8, 8]} />
+        <meshStandardMaterial color="#f3efe4" emissive="#ffffff" emissiveIntensity={0.7} />
       </mesh>
     </group>
   );
@@ -405,29 +468,29 @@ function Leg({
   position,
   material,
   dark,
+  thigh,
   back,
 }: {
   refEl: RefObject<THREE.Group | null>;
   position: [number, number, number];
   material: THREE.Material;
   dark: THREE.Material;
+  thigh?: THREE.BufferGeometry;
   back?: boolean;
 }) {
   return (
     <group ref={refEl} position={position}>
-      {back && (
-        <mesh castShadow material={material} position={[0, -0.025, -0.012]} scale={[0.9, 1.15, 1.25]}>
-          <sphereGeometry args={[0.05, 14, 12]} />
-        </mesh>
+      {back && thigh && (
+        <mesh castShadow material={material} position={[0, -0.025, -0.012]} scale={[0.9, 1.15, 1.25]} geometry={thigh} />
       )}
       <mesh castShadow material={material} position={[0, -0.065, 0]}>
-        <capsuleGeometry args={[0.024, back ? 0.075 : 0.085, 4, 10]} />
+        <capsuleGeometry args={[0.021, back ? 0.075 : 0.085, 4, 10]} />
       </mesh>
       <mesh castShadow material={material} position={[0, -0.115, 0.012]} scale={[1, 0.55, 1.4]}>
-        <sphereGeometry args={[0.026, 12, 10]} />
+        <sphereGeometry args={[0.024, 12, 10]} />
       </mesh>
-      <mesh material={dark} position={[0, -0.122, 0.012]} scale={[0.7, 0.3, 0.9]}>
-        <sphereGeometry args={[0.02, 10, 8]} />
+      <mesh material={dark} position={[0, -0.121, 0.012]} scale={[0.7, 0.3, 0.9]}>
+        <sphereGeometry args={[0.018, 10, 8]} />
       </mesh>
     </group>
   );
