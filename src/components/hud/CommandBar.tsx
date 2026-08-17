@@ -43,7 +43,7 @@ export function CommandBar() {
   };
 
   return (
-    <div className="pointer-events-auto w-full rounded-2xl bg-card/90 p-3 shadow-lg ring-1 ring-foreground/10 backdrop-blur-md">
+    <div className="pointer-events-auto w-full rounded-2xl bg-black/40 p-2 text-white shadow-lg backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <Input
           value={text}
@@ -52,17 +52,17 @@ export function CommandBar() {
             if (e.key === "Enter") submit();
           }}
           placeholder="Type: come, play, dinner, scoop…"
-          className="h-12 text-base"
+          className="h-11 bg-white/95 text-base text-foreground"
           enterKeyHint="send"
         />
-        <Button type="button" size="lg" className="h-12 px-4" onClick={submit}>
+        <Button type="button" size="lg" className="h-11 px-4" onClick={submit}>
           Say it
         </Button>
         <Button
           type="button"
           size="lg"
-          variant={listening ? "default" : "outline"}
-          className="h-12 w-12"
+          variant={listening ? "default" : "secondary"}
+          className="h-11 w-11"
           aria-label="Voice command"
           onClick={() => {
             void sounds.unlock();
@@ -86,7 +86,7 @@ export function CommandBar() {
           type="button"
           size="lg"
           variant="outline"
-          className="h-12 w-12"
+          className="h-11 w-11"
           aria-label={muted ? "Unmute" : "Mute"}
           onClick={toggleMute}
         >
@@ -113,15 +113,13 @@ export function CommandBar() {
       {lastCommand ? (
         <p className="mt-2 text-sm">
           You: “{lastCommand.text}” —{" "}
-          <span className={lastCommand.obeyed ? "text-emerald-800" : "text-amber-800"}>
+          <span className={lastCommand.obeyed ? "text-emerald-200" : "text-amber-200"}>
             {lastCommand.obeyed ? "she listened" : "she ignored it"}
           </span>
           . {lastCommand.reason}
         </p>
       ) : (
-        <p className="mt-2 text-sm text-muted-foreground">
-          Cats are not dogs. Ask once. If she ignores you, meet a need first.
-        </p>
+        <p className="mt-2 text-sm text-white/70">Ask once. If she ignores you, meet a need first.</p>
       )}
       {speechError ? <p className="mt-1 text-sm text-destructive">{speechError}</p> : null}
       {listening ? <p className="mt-1 text-sm font-medium">Listening…</p> : null}

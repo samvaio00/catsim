@@ -1,5 +1,5 @@
 export const touchCamera = {
-  az: 0.55,
-  pol: 0.95,
-  dist: 4.5,
+  az: 0.72,
+  pol: 1.05,
+  dist: 6.4,
 };

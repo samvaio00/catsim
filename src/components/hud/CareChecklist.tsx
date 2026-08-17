@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PLAY_SECONDS_GOAL, choreScore } from "@/lib/sim/needs";
 import { useSim } from "@/lib/sim/store";
 
@@ -21,68 +20,37 @@ export function CareChecklist() {
   const score = choreScore(chores, messes, playSeconds);
 
   const items = [
-    {
-      done: chores.fed && foodBowl > 15,
-      label: "Feed",
-      detail: foodBowl < 15 ? "Bowl is empty" : "Bowl has food",
-      action: refillFood,
-    },
-    {
-      done: chores.watered && waterBowl > 15,
-      label: "Fresh water",
-      detail: waterBowl < 15 ? "Water is low" : "Water is in",
-      action: refillWater,
-    },
-    {
-      done: chores.scooped && litterDirt < 40,
-      label: "Scoop litter",
-      detail: litterDirt > 55 ? "Box is dirty" : "Box is usable",
-      action: scoopLitter,
-    },
+    { done: chores.fed && foodBowl > 15, label: "Feed", action: refillFood },
+    { done: chores.watered && waterBowl > 15, label: "Water", action: refillWater },
+    { done: chores.scooped && litterDirt < 40, label: "Scoop", action: scoopLitter },
     {
       done: chores.played || playSeconds >= PLAY_SECONDS_GOAL,
-      label: "Play hunt",
-      detail: `${Math.round(playSeconds)}s / ${PLAY_SECONDS_GOAL}s today`,
+      label: playSession ? "Play on" : "Play",
       action: () => togglePlay(),
     },
-    {
-      done: messes.length === 0,
-      label: "Clean messes",
-      detail: messes.length ? `${messes.length} still on the floor` : "Floor is clear",
-      action: cleanAll,
-    },
+    { done: messes.length === 0, label: messes.length ? `Clean ${messes.length}` : "Clean", action: cleanAll },
   ];
 
   return (
-    <Card className="pointer-events-auto bg-card/90 backdrop-blur-md">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between text-base">
-          Today&apos;s care
-          <span className="text-sm font-normal text-muted-foreground">{score}% done</span>
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          This is the real job. A cute cat still needs a human who scoops, plays, and picks up.
-        </p>
-      </CardHeader>
-      <CardContent className="grid grid-cols-1 gap-2">
+    <div className="pointer-events-auto rounded-2xl bg-black/40 p-2 shadow-lg backdrop-blur-sm">
+      <p className="mb-1 px-1 text-[11px] font-medium tracking-wide text-white/80 uppercase">
+        Today {score}%
+      </p>
+      <div className="flex flex-wrap gap-1.5">
         {items.map((item) => (
           <Button
             key={item.label}
             type="button"
             variant={item.done ? "secondary" : "default"}
-            size="lg"
-            className="h-12 w-full justify-between px-3 text-left"
+            size="sm"
+            className="h-10 px-3"
             onClick={item.action}
           >
-            <span>
-              <span className="mr-2">{item.done ? "✓" : "○"}</span>
-              {item.label}
-              {item.label === "Play hunt" && playSession ? " (on)" : ""}
-            </span>
-            <span className="text-xs font-normal opacity-80">{item.detail}</span>
+            {item.done ? "✓ " : ""}
+            {item.label}
           </Button>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
