@@ -170,6 +170,8 @@ export function TouchController() {
       if (!prev) return;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
       if (Math.hypot(e.clientX - prev.x, e.clientY - prev.y) > 8) moved = true;
       pointers.set(e.pointerId, { ...prev, x: e.clientX, y: e.clientY });
 
@@ -202,8 +204,6 @@ export function TouchController() {
       if (useSim.getState().playSession && pointers.size === 1 && prev.floor) {
         useSim.getState().setPrey(projectFloor(e.clientX, e.clientY, 0.05));
       }
-      lastX = e.clientX;
-      lastY = e.clientY;
     };
 
     const onUp = (e: PointerEvent) => {

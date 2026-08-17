@@ -611,3 +611,8 @@ export function guardianScore() {
   const s = useSim.getState();
   return choreScore(s.chores, s.messes, s.playSecondsToday);
 }
+
+// Exposed for automated playtesting and debugging.
+if (typeof window !== "undefined") {
+  (window as unknown as { __puraSim?: typeof useSim }).__puraSim = useSim;
+}

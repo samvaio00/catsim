@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
+import * as THREE from "three";
 import { TICK_MS } from "@/lib/sim/needs";
 import { sounds } from "@/lib/sim/sounds";
 import { useSim } from "@/lib/sim/store";
@@ -31,6 +32,10 @@ export function CatCanvas() {
         camera={{ position: [0.2, 1.7, -2.45], fov: 50, near: 0.08, far: 30 }}
         onCreated={({ gl }) => {
           gl.setClearColor("#7fa0c4", 1);
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.06;
+          gl.shadowMap.enabled = true;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
           gl.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault(), false);
         }}
         onPointerDown={() => {

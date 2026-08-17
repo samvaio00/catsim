@@ -1,256 +1,382 @@
 "use client";
 
+import { useMemo } from "react";
+import * as THREE from "three";
+import { RoundedBox } from "@react-three/drei";
 import { useSim } from "@/lib/sim/store";
 import { ROOM } from "@/lib/sim/world";
-
-function Box({
-  args,
-  position,
-  color,
-  roughness = 0.75,
-  metalness = 0,
-  rotation,
-  userData,
-}: {
-  args: [number, number, number];
-  position: [number, number, number];
-  color: string;
-  roughness?: number;
-  metalness?: number;
-  rotation?: [number, number, number];
-  userData?: Record<string, unknown>;
-}) {
-  return (
-    <mesh position={position} rotation={rotation} castShadow receiveShadow userData={userData}>
-      <boxGeometry args={args} />
-      <meshStandardMaterial color={color} roughness={roughness} metalness={metalness} />
-    </mesh>
-  );
-}
+import {
+  artTexture,
+  fabricTexture,
+  plasterTexture,
+  rugTexture,
+  sisalTexture,
+  woodFloorTexture,
+} from "@/lib/sim/textures";
 
 export function LivingRoom() {
   const foodBowl = useSim((s) => s.foodBowl);
   const waterBowl = useSim((s) => s.waterBowl);
   const litterDirt = useSim((s) => s.litterDirt);
-  const refillFood = useSim((s) => s.refillFood);
-  const refillWater = useSim((s) => s.refillWater);
-  const scoopLitter = useSim((s) => s.scoopLitter);
+
+  const mats = useMemo(
+    () => ({
+      floor: new THREE.MeshStandardMaterial({
+        map: woodFloorTexture(),
+        roughness: 0.55,
+        metalness: 0.05,
+      }),
+      plaster: new THREE.MeshStandardMaterial({ map: plasterTexture(), roughness: 0.95 }),
+      rug: new THREE.MeshStandardMaterial({ map: rugTexture(), roughness: 0.98 }),
+      sofa: new THREE.MeshStandardMaterial({
+        map: fabricTexture("#7a4a34", "sofa", 21),
+        roughness: 0.96,
+      }),
+      sofaCushion: new THREE.MeshStandardMaterial({
+        map: fabricTexture("#a4603f", "sofaCushion", 22),
+        roughness: 0.97,
+      }),
+      chair: new THREE.MeshStandardMaterial({
+        map: fabricTexture("#4f3a2c", "chair", 23),
+        roughness: 0.96,
+      }),
+      chairCushion: new THREE.MeshStandardMaterial({
+        map: fabricTexture("#8a5340", "chairCushion", 24),
+        roughness: 0.97,
+      }),
+      darkWood: new THREE.MeshStandardMaterial({ color: "#4a3020", roughness: 0.5 }),
+      walnut: new THREE.MeshStandardMaterial({ color: "#6b4a30", roughness: 0.45 }),
+      trim: new THREE.MeshStandardMaterial({ color: "#e8d3b0", roughness: 0.8 }),
+      sisal: new THREE.MeshStandardMaterial({ map: sisalTexture(), roughness: 1 }),
+      carpet: new THREE.MeshStandardMaterial({
+        map: fabricTexture("#6a4a36", "treeCarpet", 25),
+        roughness: 1,
+      }),
+      ceramic: new THREE.MeshStandardMaterial({ color: "#f2efe8", roughness: 0.25 }),
+    }),
+    [],
+  );
 
   return (
     <group>
-      <hemisphereLight args={["#fff4dd", "#6a4a38", 0.85]} />
-      <ambientLight intensity={0.35} color="#f3e6d0" />
+      {/* --- Lighting: late-afternoon sun through the window, warm lamp. --- */}
+      <hemisphereLight args={["#fff4dd", "#6a4a38", 0.7]} />
+      <ambientLight intensity={0.3} color="#f3e6d0" />
       <directionalLight
         castShadow
-        position={[3.8, 5.8, 1.6]}
-        intensity={1.8}
-        color="#fff3d2"
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-far={16}
+        position={[4.6, 4.4, 1.2]}
+        intensity={2.1}
+        color="#ffe9bd"
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-far={18}
         shadow-camera-left={-6}
         shadow-camera-right={6}
         shadow-camera-top={6}
         shadow-camera-bottom={-6}
+        shadow-bias={-0.0004}
       />
-      <pointLight position={[3.4, 1.6, 0.3]} intensity={0.8} color="#ffe7a8" />
-      <pointLight position={[-1.6, 1.9, 1.2]} intensity={0.45} color="#ffd7a1" />
+      <pointLight position={[-2.55, 1.55, -0.35]} intensity={5} distance={6} decay={2} color="#ffcf8e" />
+      <pointLight position={[3.2, 1.7, 0.3]} intensity={2.5} distance={7} decay={2} color="#ffe7a8" />
 
-      <mesh position={[0, -0.1, 0]} receiveShadow userData={{ floor: true }}>
+      {/* --- Floor and rug --- */}
+      <mesh position={[0, -0.1, 0]} receiveShadow userData={{ floor: true }} material={mats.floor}>
         <boxGeometry args={[ROOM.size.x, 0.2, ROOM.size.z]} />
-        <meshStandardMaterial color="#9a6238" roughness={0.45} />
       </mesh>
-      {[-3, -1.5, 0, 1.5, 3].map((x) => (
-        <mesh key={x} position={[x, 0.002, 0]} receiveShadow userData={{ floor: true }}>
-          <boxGeometry args={[0.04, 0.002, ROOM.size.z]} />
-          <meshStandardMaterial color="#7d4d2c" />
+      <mesh
+        position={[ROOM.rug[0], 0.016, ROOM.rug[2]]}
+        receiveShadow
+        userData={{ floor: true }}
+        material={mats.rug}
+      >
+        <boxGeometry args={[3.6, 0.032, 2.6]} />
+      </mesh>
+
+      {/* --- Walls, ceiling, baseboards --- */}
+      <mesh position={[0, 1.35, -ROOM.size.z / 2]} receiveShadow material={mats.plaster}>
+        <boxGeometry args={[ROOM.size.x, 2.7, 0.14]} />
+      </mesh>
+      <mesh position={[0, 1.35, ROOM.size.z / 2]} receiveShadow material={mats.plaster}>
+        <boxGeometry args={[ROOM.size.x, 2.7, 0.14]} />
+      </mesh>
+      <mesh position={[-ROOM.size.x / 2, 1.35, 0]} receiveShadow material={mats.plaster}>
+        <boxGeometry args={[0.14, 2.7, ROOM.size.z]} />
+      </mesh>
+      <mesh position={[ROOM.size.x / 2, 1.35, 0]} receiveShadow material={mats.plaster}>
+        <boxGeometry args={[0.14, 2.7, ROOM.size.z]} />
+      </mesh>
+      <mesh position={[0, 2.7, 0]}>
+        <boxGeometry args={[ROOM.size.x, 0.1, ROOM.size.z]} />
+        <meshStandardMaterial color="#f6eedd" roughness={0.95} />
+      </mesh>
+      {[
+        [0, 0.09, -ROOM.size.z / 2 + 0.09, ROOM.size.x, 0.18, 0.05],
+        [0, 0.09, ROOM.size.z / 2 - 0.09, ROOM.size.x, 0.18, 0.05],
+        [-ROOM.size.x / 2 + 0.09, 0.09, 0, 0.05, 0.18, ROOM.size.z],
+        [ROOM.size.x / 2 - 0.09, 0.09, 0, 0.05, 0.18, ROOM.size.z],
+      ].map(([x, y, z, w, h, d], i) => (
+        <mesh key={i} position={[x, y, z]} material={mats.trim}>
+          <boxGeometry args={[w, h, d]} />
         </mesh>
       ))}
 
-      <mesh position={[0.1, 0.015, 0.2]} receiveShadow userData={{ floor: true }}>
-        <boxGeometry args={[3.6, 0.03, 2.6]} />
-        <meshStandardMaterial color="#8b2e28" roughness={0.95} />
-      </mesh>
-      <mesh position={[0.1, 0.02, 0.2]} receiveShadow>
-        <boxGeometry args={[3.2, 0.02, 2.2]} />
-        <meshStandardMaterial color="#6f241f" roughness={1} />
-      </mesh>
-
-      <Box args={[ROOM.size.x, 2.7, 0.14]} position={[0, 1.35, -ROOM.size.z / 2]} color="#f3e6cf" />
-      <Box args={[ROOM.size.x, 2.7, 0.14]} position={[0, 1.35, ROOM.size.z / 2]} color="#efe0c6" />
-      <Box args={[0.14, 2.7, ROOM.size.z]} position={[-ROOM.size.x / 2, 1.35, 0]} color="#f6ead4" />
-      <Box args={[0.14, 2.7, ROOM.size.z]} position={[ROOM.size.x / 2, 1.35, 0]} color="#f6ead4" />
-      <Box args={[ROOM.size.x, 0.1, ROOM.size.z]} position={[0, 2.7, 0]} color="#fff6e8" roughness={0.95} />
-      <Box args={[ROOM.size.x, 0.12, 0.12]} position={[0, 2.55, ROOM.size.z / 2 - 0.12]} color="#e8d3b0" />
-      <Box args={[ROOM.size.x, 0.12, 0.12]} position={[0, 0.18, ROOM.size.z / 2 - 0.12]} color="#e8d3b0" />
-
-      <group position={[ROOM.size.x / 2 - 0.12, 1.45, 0.15]}>
-        <Box args={[0.05, 1.7, 2.1]} position={[0, 0, 0]} color="#d7b58a" />
-        <mesh position={[-0.04, 0, 0]}>
-          <boxGeometry args={[0.04, 1.46, 1.86]} />
-          <meshStandardMaterial color="#b9dfff" transparent opacity={0.35} roughness={0.05} metalness={0.15} />
+      {/* --- Window with muntins, sky, and a sun patch on the floor --- */}
+      <group position={[ROOM.size.x / 2 - 0.1, 1.5, 0.15]}>
+        <mesh material={mats.trim}>
+          <boxGeometry args={[0.06, 1.8, 2.2]} />
         </mesh>
-        <Box args={[0.08, 1.72, 0.08]} position={[-0.02, 0, 0]} color="#c9a36e" />
+        <mesh position={[-0.045, 0, 0]}>
+          <boxGeometry args={[0.03, 1.56, 1.96]} />
+          <meshStandardMaterial color="#bfe0f4" emissive="#a8cfe8" emissiveIntensity={0.8} roughness={0.1} />
+        </mesh>
+        {[-0.49, 0, 0.49].map((z) => (
+          <mesh key={z} position={[-0.05, 0, z]} material={mats.trim}>
+            <boxGeometry args={[0.04, 1.56, 0.045]} />
+          </mesh>
+        ))}
+        <mesh position={[-0.05, 0, 0]} material={mats.trim}>
+          <boxGeometry args={[0.04, 0.045, 1.96]} />
+        </mesh>
+        <mesh position={[-0.08, -0.95, 0]} material={mats.trim}>
+          <boxGeometry args={[0.14, 0.05, 2.3]} />
+        </mesh>
       </group>
-      <mesh position={[2.9, 0.02, 0.15]} rotation={[-Math.PI / 2, 0, 0.1]}>
-        <planeGeometry args={[1.8, 2.4]} />
-        <meshStandardMaterial color="#ffe29a" transparent opacity={0.28} />
+      <mesh position={[2.95, 0.034, 0.2]} rotation={[-Math.PI / 2, 0, 0.12]}>
+        <planeGeometry args={[1.7, 2.3]} />
+        <meshStandardMaterial color="#ffdf94" transparent opacity={0.3} depthWrite={false} />
       </mesh>
 
-      <Box args={[2.7, 0.46, 0.98]} position={[0.2, 0.23, 2.42]} color="#5a3828" />
-      <Box args={[2.7, 0.42, 0.16]} position={[0.2, 0.64, 2.84]} color="#6d4432" />
-      <Box args={[0.16, 0.5, 0.96]} position={[-1.08, 0.64, 2.42]} color="#6d4432" />
-      <Box args={[0.16, 0.5, 0.96]} position={[1.48, 0.64, 2.42]} color="#6d4432" />
-      <Box args={[2.35, 0.16, 0.72]} position={[0.2, 0.5, 2.35]} color="#a45d45" roughness={0.92} />
-      <Box args={[0.42, 0.22, 0.42]} position={[-0.7, 0.58, 2.3]} color="#c46a4a" roughness={0.95} />
-      <Box args={[0.42, 0.22, 0.42]} position={[1.05, 0.58, 2.3]} color="#d8c4a0" roughness={0.95} />
+      {/* --- Sofa: base, arms, back, seat + back cushions, throw pillows --- */}
+      <group position={[0.2, 0, 2.42]}>
+        <RoundedBox args={[2.7, 0.42, 0.98]} radius={0.05} smoothness={3} position={[0, 0.21, 0]} castShadow receiveShadow material={mats.sofa} />
+        <RoundedBox args={[2.7, 0.5, 0.2]} radius={0.06} smoothness={3} position={[0, 0.62, 0.4]} castShadow material={mats.sofa} />
+        <RoundedBox args={[0.2, 0.34, 0.98]} radius={0.06} smoothness={3} position={[-1.25, 0.55, 0]} castShadow material={mats.sofa} />
+        <RoundedBox args={[0.2, 0.34, 0.98]} radius={0.06} smoothness={3} position={[1.25, 0.55, 0]} castShadow material={mats.sofa} />
+        {[-0.82, 0, 0.82].map((x) => (
+          <RoundedBox key={x} args={[0.78, 0.15, 0.72]} radius={0.06} smoothness={3} position={[x, 0.475, -0.06]} castShadow receiveShadow material={mats.sofaCushion} />
+        ))}
+        {[-0.82, 0, 0.82].map((x) => (
+          <RoundedBox key={x} args={[0.78, 0.4, 0.16]} radius={0.07} smoothness={3} position={[x, 0.66, 0.28]} rotation={[-0.12, 0, 0]} castShadow material={mats.sofaCushion} />
+        ))}
+        <RoundedBox args={[0.36, 0.36, 0.12]} radius={0.06} smoothness={3} position={[-1.0, 0.68, 0.22]} rotation={[-0.2, 0, 0.35]} castShadow>
+          <meshStandardMaterial map={fabricTexture("#c4703f", "pillow1", 26)} roughness={0.97} />
+        </RoundedBox>
+        <RoundedBox args={[0.36, 0.36, 0.12]} radius={0.06} smoothness={3} position={[1.02, 0.68, 0.22]} rotation={[-0.2, 0, -0.3]} castShadow>
+          <meshStandardMaterial map={fabricTexture("#d8c4a0", "pillow2", 27)} roughness={0.97} />
+        </RoundedBox>
+      </group>
 
-      <Box args={[0.92, 0.4, 0.9]} position={[-2.4, 0.2, 0.85]} color="#4a3224" />
-      <Box args={[0.86, 0.18, 0.72]} position={[-2.4, 0.48, 0.72]} color="#8a5340" roughness={0.92} />
-      <Box args={[0.16, 0.48, 0.86]} position={[-2.4, 0.62, 1.2]} color="#5a4030" />
+      {/* --- Armchair --- */}
+      <group position={[-2.4, 0, 0.85]} rotation={[0, 0.35, 0]}>
+        <RoundedBox args={[0.92, 0.38, 0.9]} radius={0.05} smoothness={3} position={[0, 0.19, 0]} castShadow receiveShadow material={mats.chair} />
+        <RoundedBox args={[0.92, 0.52, 0.18]} radius={0.06} smoothness={3} position={[0, 0.6, 0.36]} castShadow material={mats.chair} />
+        <RoundedBox args={[0.16, 0.3, 0.9]} radius={0.06} smoothness={3} position={[-0.4, 0.52, 0]} castShadow material={mats.chair} />
+        <RoundedBox args={[0.16, 0.3, 0.9]} radius={0.06} smoothness={3} position={[0.4, 0.52, 0]} castShadow material={mats.chair} />
+        <RoundedBox args={[0.66, 0.14, 0.66]} radius={0.06} smoothness={3} position={[0, 0.44, -0.02]} castShadow receiveShadow material={mats.chairCushion} />
+        <RoundedBox args={[0.66, 0.36, 0.14]} radius={0.07} smoothness={3} position={[0, 0.6, 0.26]} rotation={[-0.12, 0, 0]} castShadow material={mats.chairCushion} />
+      </group>
 
-      <Box args={[1.2, 0.08, 0.64]} position={[0.25, 0.38, 0.8]} color="#3a2418" />
-      <Box args={[0.08, 0.3, 0.08]} position={[0.25, 0.16, 0.8]} color="#2a1a12" />
-      <Box args={[0.22, 0.04, 0.28]} position={[-0.15, 0.43, 0.72]} color="#1b1d22" />
-      <mesh position={[0.55, 0.48, 0.72]}>
-        <cylinderGeometry args={[0.05, 0.04, 0.1, 14]} />
-        <meshStandardMaterial color="#f4efe6" roughness={0.2} />
-      </mesh>
+      {/* --- Coffee table: wood top, lower shelf, tapered legs --- */}
+      <group position={[0.25, 0, 0.8]}>
+        <mesh position={[0, 0.415, 0]} castShadow receiveShadow material={mats.walnut}>
+          <boxGeometry args={[1.2, 0.05, 0.64]} />
+        </mesh>
+        <mesh position={[0, 0.14, 0]} castShadow material={mats.darkWood}>
+          <boxGeometry args={[1.0, 0.03, 0.5]} />
+        </mesh>
+        {[
+          [-0.54, -0.26],
+          [0.54, -0.26],
+          [-0.54, 0.26],
+          [0.54, 0.26],
+        ].map(([x, z]) => (
+          <mesh key={`${x}${z}`} position={[x, 0.195, z]} castShadow material={mats.darkWood}>
+            <cylinderGeometry args={[0.025, 0.035, 0.39, 10]} />
+          </mesh>
+        ))}
+      </group>
 
-      <Box args={[1.6, 0.5, 0.4]} position={[-0.05, 0.25, -2.95]} color="#2c2620" />
-      <Box args={[1.22, 0.68, 0.06]} position={[-0.05, 0.78, -2.94]} color="#111318" />
-      <mesh position={[-0.05, 0.78, -2.9]}>
-        <planeGeometry args={[1.1, 0.56]} />
-        <meshStandardMaterial color="#7ea0c4" emissive="#3a5a7a" emissiveIntensity={0.35} />
-      </mesh>
+      {/* --- TV console and screen --- */}
+      <group position={[-0.05, 0, -2.95]}>
+        <RoundedBox args={[1.6, 0.5, 0.4]} radius={0.03} smoothness={2} position={[0, 0.25, 0]} castShadow receiveShadow material={mats.darkWood} />
+        <mesh position={[0, 0.26, 0.21]}>
+          <boxGeometry args={[0.68, 0.34, 0.02]} />
+          <meshStandardMaterial color="#241a10" roughness={0.4} />
+        </mesh>
+        <group position={[0, 0.86, 0.05]}>
+          <RoundedBox args={[1.3, 0.74, 0.05]} radius={0.015} smoothness={2} castShadow>
+            <meshStandardMaterial color="#101216" roughness={0.3} metalness={0.4} />
+          </RoundedBox>
+          <mesh position={[0, 0, 0.028]}>
+            <planeGeometry args={[1.22, 0.66]} />
+            <meshStandardMaterial color="#20344a" emissive="#33507a" emissiveIntensity={0.5} roughness={0.15} metalness={0.3} />
+          </mesh>
+          <mesh position={[0, -0.45, -0.04]} material={mats.darkWood}>
+            <boxGeometry args={[0.3, 0.16, 0.06]} />
+          </mesh>
+        </group>
+      </group>
 
-      <Box args={[0.72, 1.55, 0.3]} position={[-3.65, 0.78, -0.15]} color="#6a4532" />
-      {[-0.4, 0.05, 0.5].map((y) => (
-        <Box key={y} args={[0.64, 0.05, 0.26]} position={[-3.65, 0.55 + y, -0.15]} color="#7d5640" />
-      ))}
-      <Box args={[0.18, 0.22, 0.14]} position={[-3.65, 1.15, -0.12]} color="#c45c3a" />
-      <Box args={[0.14, 0.2, 0.12]} position={[-3.52, 0.72, -0.1]} color="#3d6b8a" />
+      {/* --- Bookshelf with real books --- */}
+      <group position={[-3.65, 0, -0.15]}>
+        <RoundedBox args={[0.72, 1.55, 0.3]} radius={0.02} smoothness={2} position={[0, 0.775, 0]} castShadow receiveShadow material={mats.walnut} />
+        {[0.32, 0.78, 1.22].map((y, shelf) => (
+          <group key={y} position={[0, y, 0.02]}>
+            <mesh material={mats.darkWood}>
+              <boxGeometry args={[0.64, 0.03, 0.26]} />
+            </mesh>
+            {[-0.24, -0.14, -0.05, 0.05, 0.15, 0.24].map((x, i) => {
+              const h = 0.16 + ((shelf * 7 + i * 3) % 5) * 0.025;
+              const colors = ["#a4502e", "#3d6b8a", "#8a7a3a", "#5d3a54", "#2e5d43", "#b08a3a"];
+              return (
+                <mesh key={i} position={[x, 0.02 + h / 2, 0]} castShadow rotation={[0, 0, i === 5 && shelf === 1 ? 0.22 : 0]}>
+                  <boxGeometry args={[0.07, h, 0.18]} />
+                  <meshStandardMaterial color={colors[(shelf + i) % colors.length]} roughness={0.85} />
+                </mesh>
+              );
+            })}
+          </group>
+        ))}
+      </group>
 
-      <mesh position={[-1.2, 1.7, ROOM.size.z / 2 - 0.1]}>
-        <boxGeometry args={[0.7, 0.5, 0.04]} />
-        <meshStandardMaterial color="#d8c08a" />
-      </mesh>
-      <mesh position={[-1.2, 1.7, ROOM.size.z / 2 - 0.13]}>
-        <planeGeometry args={[0.58, 0.38]} />
-        <meshStandardMaterial color="#6b8f6a" />
-      </mesh>
-      <mesh position={[1.35, 1.75, ROOM.size.z / 2 - 0.1]}>
-        <boxGeometry args={[0.5, 0.62, 0.04]} />
-        <meshStandardMaterial color="#d8c08a" />
-      </mesh>
-      <mesh position={[1.35, 1.75, ROOM.size.z / 2 - 0.13]}>
-        <planeGeometry args={[0.38, 0.5]} />
-        <meshStandardMaterial color="#c47a4a" />
-      </mesh>
+      {/* --- Framed prints on the sofa wall --- */}
+      <group position={[-1.2, 1.72, ROOM.size.z / 2 - 0.1]}>
+        <mesh material={mats.walnut}>
+          <boxGeometry args={[0.72, 0.52, 0.035]} />
+        </mesh>
+        <mesh position={[0, 0, -0.022]} rotation={[0, Math.PI, 0]}>
+          <planeGeometry args={[0.6, 0.4]} />
+          <meshStandardMaterial map={artTexture("leaves")} roughness={0.9} />
+        </mesh>
+      </group>
+      <group position={[1.35, 1.78, ROOM.size.z / 2 - 0.1]}>
+        <mesh material={mats.walnut}>
+          <boxGeometry args={[0.52, 0.64, 0.035]} />
+        </mesh>
+        <mesh position={[0, 0, -0.022]} rotation={[0, Math.PI, 0]}>
+          <planeGeometry args={[0.4, 0.52]} />
+          <meshStandardMaterial map={artTexture("sunset")} roughness={0.9} />
+        </mesh>
+      </group>
 
+      {/* --- Floor lamp with drum shade --- */}
       <group position={[-2.55, 0, -0.35]}>
-        <mesh position={[0, 0.95, 0]} castShadow>
-          <cylinderGeometry args={[0.045, 0.055, 1.9, 10]} />
-          <meshStandardMaterial color="#e2c89a" />
+        <mesh position={[0, 0.02, 0]} castShadow material={mats.darkWood}>
+          <cylinderGeometry args={[0.16, 0.18, 0.04, 16]} />
         </mesh>
-        <mesh position={[0, 1.9, 0]}>
-          <sphereGeometry args={[0.2, 14, 14]} />
-          <meshStandardMaterial color="#fff6d6" emissive="#ffd27a" emissiveIntensity={0.55} />
+        <mesh position={[0, 0.85, 0]} castShadow material={mats.darkWood}>
+          <cylinderGeometry args={[0.02, 0.02, 1.66, 8]} />
         </mesh>
-      </group>
-
-      <group position={[-3.2, 0, -2.15]}>
-        <mesh position={[0, 0.08, 0]}>
-          <cylinderGeometry args={[0.16, 0.13, 0.16, 12]} />
-          <meshStandardMaterial color="#8a4a32" />
-        </mesh>
-        <mesh position={[0, 0.38, 0]} castShadow>
-          <sphereGeometry args={[0.28, 12, 10]} />
-          <meshStandardMaterial color="#2f6b3a" />
-        </mesh>
-        <mesh position={[0.12, 0.55, 0.05]}>
-          <sphereGeometry args={[0.16, 10, 8]} />
-          <meshStandardMaterial color="#3d7d44" />
+        <mesh position={[0, 1.68, 0]} castShadow>
+          <cylinderGeometry args={[0.2, 0.24, 0.26, 18, 1, true]} />
+          <meshStandardMaterial color="#e8d4a8" roughness={0.9} side={THREE.DoubleSide} emissive="#ffca7a" emissiveIntensity={0.12} />
         </mesh>
       </group>
 
-      <group position={ROOM.catTree}>
-        <mesh position={[0, 0.15, 0]} castShadow>
-          <cylinderGeometry args={[0.1, 0.1, 1.3, 10]} />
-          <meshStandardMaterial color="#c9ad86" roughness={1} />
+      {/* --- Potted plant --- */}
+      <group position={[-3.0, 0, -1.5]}>
+        <mesh position={[0, 0.1, 0]} castShadow>
+          <cylinderGeometry args={[0.15, 0.11, 0.2, 14]} />
+          <meshStandardMaterial color="#9a5238" roughness={0.8} />
         </mesh>
-        <Box args={[0.62, 0.07, 0.62]} position={[0, 0.04, 0]} color="#6a4a36" />
-        <Box args={[0.52, 0.07, 0.52]} position={[0.06, 0.62, 0]} color="#6a4a36" />
-        <Box args={[0.36, 0.3, 0.1]} position={[0.02, 0.32, 0.2]} color="#8d6a4a" />
+        <mesh position={[0, 0.19, 0]}>
+          <cylinderGeometry args={[0.13, 0.13, 0.03, 14]} />
+          <meshStandardMaterial color="#3a2818" roughness={1} />
+        </mesh>
+        {[0, 1, 2, 3, 4, 5].map((i) => {
+          const a = (i / 6) * Math.PI * 2;
+          const lean = 0.35 + (i % 3) * 0.14;
+          return (
+            <group key={i} rotation={[0, a, 0]}>
+              <mesh position={[0, 0.42, 0]} rotation={[lean, 0, 0]} castShadow>
+                <cylinderGeometry args={[0.006, 0.009, 0.5, 6]} />
+                <meshStandardMaterial color="#3d5a2e" roughness={0.9} />
+              </mesh>
+              <mesh
+                position={[0, 0.52 + (i % 3) * 0.09, 0.24 + (i % 2) * 0.08]}
+                rotation={[lean + 0.9, 0, 0]}
+                scale={[0.5, 1, 0.12]}
+                castShadow
+              >
+                <sphereGeometry args={[0.14, 10, 8]} />
+                <meshStandardMaterial color={i % 2 ? "#2f6b3a" : "#3d7d44"} roughness={0.75} />
+              </mesh>
+            </group>
+          );
+        })}
       </group>
 
+      {/* --- Cat tree: carpeted platforms, sisal post, hidey condo --- */}
+      <group position={[-3.3, 0, -2.2]}>
+        <mesh position={[0, 0.025, 0]} castShadow receiveShadow material={mats.carpet}>
+          <boxGeometry args={[0.64, 0.05, 0.64]} />
+        </mesh>
+        <mesh position={[-0.14, 0.32, -0.14]} castShadow material={mats.sisal}>
+          <cylinderGeometry args={[0.055, 0.055, 0.58, 12]} />
+        </mesh>
+        <mesh position={[0, 0.6, 0]} castShadow receiveShadow material={mats.carpet}>
+          <boxGeometry args={[0.52, 0.05, 0.52]} />
+        </mesh>
+        <RoundedBox args={[0.4, 0.34, 0.4]} radius={0.03} smoothness={2} position={[0.08, 0.82, 0.08]} castShadow material={mats.carpet} />
+        <mesh position={[0.08, 0.78, 0.285]}>
+          <cylinderGeometry args={[0.09, 0.09, 0.02, 16]} />
+          <meshStandardMaterial color="#241812" roughness={1} />
+        </mesh>
+        <mesh position={[0.16, 0.95, 0.16]} castShadow material={mats.sisal}>
+          <cylinderGeometry args={[0.05, 0.05, 0.56, 12]} />
+        </mesh>
+        <mesh position={[0, 1.2, 0]} castShadow receiveShadow material={mats.carpet}>
+          <boxGeometry args={[0.5, 0.05, 0.5]} />
+        </mesh>
+      </group>
+
+      {/* --- Food station --- */}
       <group position={ROOM.food} userData={{ care: "food" }}>
-        <mesh
-          userData={{ care: "food" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            refillFood();
-          }}
-        >
-          <cylinderGeometry args={[0.14, 0.17, 0.06, 20]} />
-          <meshStandardMaterial color="#e8e0d4" roughness={0.3} metalness={0.15} />
+        <mesh userData={{ care: "food" }} castShadow material={mats.ceramic}>
+          <cylinderGeometry args={[0.14, 0.17, 0.07, 24]} />
         </mesh>
-        <mesh position={[0, 0.03, 0]}>
-          <cylinderGeometry args={[0.11, 0.11, 0.03, 16]} />
-          <meshStandardMaterial color={foodBowl > 8 ? "#6b4a28" : "#e8e0d4"} />
+        <mesh position={[0, 0.026, 0]} userData={{ care: "food" }}>
+          <cylinderGeometry args={[0.11, 0.11, 0.032, 20]} />
+          <meshStandardMaterial color={foodBowl > 8 ? "#6b4a28" : "#d8d0c2"} roughness={0.7} />
         </mesh>
-        <Box
-          args={[0.18, 0.22, 0.12]}
-          position={[0.34, 0.11, 0.02]}
-          color="#d85a28"
-          userData={{ care: "food" }}
-        />
+        {/* Kibble bag */}
+        <group position={[0.36, 0, 0.04]} userData={{ care: "food" }}>
+          <RoundedBox args={[0.2, 0.3, 0.12]} radius={0.02} smoothness={2} position={[0, 0.15, 0]} castShadow userData={{ care: "food" }}>
+            <meshStandardMaterial color="#d85a28" roughness={0.6} />
+          </RoundedBox>
+          <mesh position={[0, 0.16, 0.062]} userData={{ care: "food" }}>
+            <planeGeometry args={[0.13, 0.16]} />
+            <meshStandardMaterial color="#f4e8d4" roughness={0.7} />
+          </mesh>
+        </group>
       </group>
 
+      {/* --- Water bowl --- */}
       <group position={ROOM.water} userData={{ care: "water" }}>
-        <mesh
-          userData={{ care: "water" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            refillWater();
-          }}
-        >
-          <cylinderGeometry args={[0.13, 0.16, 0.06, 20]} />
-          <meshStandardMaterial color="#d5e2ea" roughness={0.25} metalness={0.2} />
+        <mesh userData={{ care: "water" }} castShadow>
+          <cylinderGeometry args={[0.13, 0.16, 0.07, 24]} />
+          <meshStandardMaterial color="#c4d4de" roughness={0.25} metalness={0.25} />
         </mesh>
-        <mesh position={[0, 0.03, 0]}>
-          <cylinderGeometry args={[0.1, 0.1, 0.03, 16]} />
-          <meshStandardMaterial
-            color={waterBowl > 8 ? "#6eb8d8" : "#d5e2ea"}
+        <mesh position={[0, 0.026, 0]} userData={{ care: "water" }}>
+          <cylinderGeometry args={[0.105, 0.105, 0.032, 20]} />
+          <meshPhysicalMaterial
+            color={waterBowl > 8 ? "#5ea8cc" : "#c4d4de"}
             transparent
-            opacity={waterBowl > 8 ? 0.7 : 1}
+            opacity={waterBowl > 8 ? 0.75 : 1}
+            roughness={0.1}
+            clearcoat={0.6}
           />
         </mesh>
       </group>
 
-      <mesh position={[0.85, 0.08, -0.15]} castShadow userData={{ grabId: "ball" }}>
-        <sphereGeometry args={[0.08, 16, 16]} />
-        <meshStandardMaterial color="#e24b2e" roughness={0.35} />
-      </mesh>
-      <mesh position={[-0.7, 0.06, 0.35]} rotation={[0, 0.4, 0.2]} castShadow userData={{ grabId: "mouse" }}>
-        <capsuleGeometry args={[0.04, 0.09, 6, 10]} />
-        <meshStandardMaterial color="#5c6166" />
-      </mesh>
-
-      <group
-        position={ROOM.litter}
-        userData={{ care: "litter" }}
-        onClick={(e) => {
-          e.stopPropagation();
-          scoopLitter();
-        }}
-      >
-        <Box args={[0.58, 0.1, 0.42]} position={[0, 0.04, 0]} color="#f2eadc" userData={{ care: "litter" }} />
-        <Box
-          args={[0.5, 0.06, 0.36]}
-          position={[0, 0.08, 0]}
-          color={litterDirt > 55 ? "#9a8458" : "#e8d7a4"}
-          userData={{ care: "litter" }}
-        />
+      {/* --- Litter box --- */}
+      <group position={ROOM.litter} userData={{ care: "litter" }}>
+        <RoundedBox args={[0.58, 0.14, 0.42]} radius={0.03} smoothness={2} position={[0, 0.06, 0]} castShadow userData={{ care: "litter" }}>
+          <meshStandardMaterial color="#e8e0d0" roughness={0.6} />
+        </RoundedBox>
+        <mesh position={[0, 0.115, 0]} userData={{ care: "litter" }}>
+          <boxGeometry args={[0.5, 0.04, 0.34]} />
+          <meshStandardMaterial color={litterDirt > 55 ? "#9a8458" : "#e0cd9c"} roughness={1} />
+        </mesh>
       </group>
     </group>
   );
