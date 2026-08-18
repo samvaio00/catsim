@@ -2,29 +2,99 @@
 
 import { useMemo } from "react";
 import * as THREE from "three";
-import { RoundedBox } from "@react-three/drei";
+import { Environment, Lightformer, RoundedBox, useTexture } from "@react-three/drei";
 import { useSim } from "@/lib/sim/store";
 import { ROOM } from "@/lib/sim/world";
 import {
+  aoBlobTexture,
   artTexture,
   fabricTexture,
+  litterTexture,
   plasterTexture,
   rugTexture,
   sisalTexture,
-  woodFloorTexture,
 } from "@/lib/sim/textures";
+
+/** Deterministic pseudo-random generator (kept pure for render safety). */
+function seededRand(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+/** Fake ambient-occlusion blob grounding a piece of furniture. */
+function AoBlob({
+  position,
+  size,
+  opacity = 0.55,
+}: {
+  position: [number, number, number];
+  size: [number, number];
+  opacity?: number;
+}) {
+  const tex = useMemo(() => aoBlobTexture(), []);
+  return (
+    <mesh position={position} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
+      <planeGeometry args={size} />
+      <meshBasicMaterial map={tex} transparent opacity={opacity} depthWrite={false} />
+    </mesh>
+  );
+}
+
+/** One gathered curtain panel: a half-cylinder shell that reads as draped cloth. */
+function Curtain({
+  position,
+  material,
+  flip,
+}: {
+  position: [number, number, number];
+  material: THREE.Material;
+  flip?: boolean;
+}) {
+  return (
+    <group position={position} rotation={[0, flip ? Math.PI : 0, 0]}>
+      <mesh castShadow material={material}>
+        <cylinderGeometry args={[0.1, 0.13, 1.78, 14, 6, true, -0.6, 1.9]} />
+      </mesh>
+      {/* Tieback pinch */}
+      <mesh material={material} position={[0.01, -0.35, 0.06]} scale={[0.55, 0.08, 0.55]}>
+        <sphereGeometry args={[0.1, 10, 8]} />
+      </mesh>
+    </group>
+  );
+}
 
 export function LivingRoom() {
   const foodBowl = useSim((s) => s.foodBowl);
   const waterBowl = useSim((s) => s.waterBowl);
   const litterDirt = useSim((s) => s.litterDirt);
+  const woodTex = useTexture("/textures/wood_floor.jpg");
 
-  const mats = useMemo(
-    () => ({
-      floor: new THREE.MeshStandardMaterial({
-        map: woodFloorTexture(),
-        roughness: 0.55,
-        metalness: 0.05,
+  const mats = useMemo(() => {
+    const wood = woodTex.clone();
+    wood.colorSpace = THREE.SRGBColorSpace;
+    wood.wrapS = THREE.RepeatWrapping;
+    wood.wrapT = THREE.RepeatWrapping;
+    wood.repeat.set(2.2, 1.7);
+    wood.anisotropy = 8;
+    wood.needsUpdate = true;
+    const woodRough = woodTex.clone();
+    woodRough.colorSpace = THREE.NoColorSpace;
+    woodRough.wrapS = THREE.RepeatWrapping;
+    woodRough.wrapT = THREE.RepeatWrapping;
+    woodRough.repeat.set(2.2, 1.7);
+    woodRough.needsUpdate = true;
+    return {
+      floor: new THREE.MeshPhysicalMaterial({
+        map: wood,
+        roughnessMap: woodRough,
+        roughness: 0.9,
+        metalness: 0,
+        clearcoat: 0.14,
+        clearcoatRoughness: 0.5,
+        envMapIntensity: 0.5,
       }),
       plaster: new THREE.MeshStandardMaterial({ map: plasterTexture(), roughness: 0.95 }),
       rug: new THREE.MeshStandardMaterial({ map: rugTexture(), roughness: 0.98 }),
@@ -44,28 +114,65 @@ export function LivingRoom() {
         map: fabricTexture("#8a5340", "chairCushion", 24),
         roughness: 0.97,
       }),
-      darkWood: new THREE.MeshStandardMaterial({ color: "#4a3020", roughness: 0.5 }),
-      walnut: new THREE.MeshStandardMaterial({ color: "#6b4a30", roughness: 0.45 }),
+      darkWood: new THREE.MeshStandardMaterial({ color: "#4a3020", roughness: 0.5, envMapIntensity: 0.3 }),
+      walnut: new THREE.MeshStandardMaterial({ color: "#6b4a30", roughness: 0.45, envMapIntensity: 0.3 }),
       trim: new THREE.MeshStandardMaterial({ color: "#e8d3b0", roughness: 0.8 }),
       sisal: new THREE.MeshStandardMaterial({ map: sisalTexture(), roughness: 1 }),
       carpet: new THREE.MeshStandardMaterial({
         map: fabricTexture("#6a4a36", "treeCarpet", 25),
         roughness: 1,
       }),
-      ceramic: new THREE.MeshStandardMaterial({ color: "#f2efe8", roughness: 0.25 }),
-    }),
-    [],
-  );
+      ceramic: new THREE.MeshPhysicalMaterial({
+        color: "#f2efe8",
+        roughness: 0.18,
+        clearcoat: 0.7,
+        clearcoatRoughness: 0.2,
+        envMapIntensity: 0.9,
+      }),
+      curtain: new THREE.MeshStandardMaterial({
+        map: fabricTexture("#caa26a", "curtain", 41),
+        roughness: 0.92,
+        side: THREE.DoubleSide,
+      }),
+      blanket: new THREE.MeshStandardMaterial({
+        map: fabricTexture("#c2b193", "blanket", 43),
+        roughness: 1,
+      }),
+      litter: new THREE.MeshStandardMaterial({ map: litterTexture(), roughness: 1 }),
+      kibble: new THREE.MeshStandardMaterial({ color: "#5d3a1c", roughness: 0.75 }),
+    };
+  }, [woodTex]);
+
+  const kibbles = useMemo(() => {
+    // Deterministic scatter of kibble bits inside the food bowl.
+    const rand = seededRand(11);
+    return Array.from({ length: 16 }, () => {
+      const a = rand() * Math.PI * 2;
+      const r = rand() * 0.075;
+      return {
+        position: [Math.cos(a) * r, 0.042, Math.sin(a) * r] as [number, number, number],
+        scale: 0.7 + rand() * 0.6,
+        rot: rand() * Math.PI,
+      };
+    });
+  }, []);
 
   return (
     <group>
+      {/* --- Image-based fill so glossy surfaces have something to reflect --- */}
+      <Environment resolution={64} frames={1}>
+        <Lightformer intensity={2.2} color="#ffe6bd" position={[4, 2.4, 0.4]} rotation={[0, -Math.PI / 2, 0]} scale={[2.4, 2, 1]} />
+        <Lightformer intensity={0.6} color="#f6ead2" position={[0, 3, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[4, 4, 1]} />
+        <Lightformer intensity={0.35} color="#ffd9a0" position={[-3, 1.6, -0.4]} rotation={[0, Math.PI / 2, 0]} scale={[1.4, 1.2, 1]} />
+      </Environment>
+
       {/* --- Lighting: late-afternoon sun through the window, warm lamp. --- */}
-      <hemisphereLight args={["#fff4dd", "#6a4a38", 0.7]} />
-      <ambientLight intensity={0.3} color="#f3e6d0" />
+      <hemisphereLight args={["#fff4dd", "#6a4a38", 0.55]} />
+      <ambientLight intensity={0.22} color="#f3e6d0" />
       <directionalLight
         castShadow
         position={[4.6, 4.4, 1.2]}
-        intensity={2.1}
+        intensity={2.3}
         color="#ffe9bd"
         shadow-mapSize={[2048, 2048]}
         shadow-camera-far={18}
@@ -74,6 +181,8 @@ export function LivingRoom() {
         shadow-camera-top={6}
         shadow-camera-bottom={-6}
         shadow-bias={-0.0004}
+        shadow-normalBias={0.015}
+        shadow-radius={4}
       />
       <pointLight position={[-2.55, 1.55, -0.35]} intensity={5} distance={6} decay={2} color="#ffcf8e" />
       <pointLight position={[3.2, 1.7, 0.3]} intensity={2.5} distance={7} decay={2} color="#ffe7a8" />
@@ -90,8 +199,16 @@ export function LivingRoom() {
       >
         <boxGeometry args={[3.6, 0.032, 2.6]} />
       </mesh>
+      {/* Rug fringe at both short ends. */}
+      {[-1, 1].map((side) =>
+        Array.from({ length: 18 }, (_, i) => (
+          <mesh key={`${side}-${i}`} material={mats.trim} position={[ROOM.rug[0] - 1.7 + i * 0.2, 0.012, ROOM.rug[2] + side * 1.36]}>
+            <boxGeometry args={[0.045, 0.006, 0.12]} />
+          </mesh>
+        )),
+      )}
 
-      {/* --- Walls, ceiling, baseboards --- */}
+      {/* --- Walls, ceiling, baseboards, crown molding --- */}
       <mesh position={[0, 1.35, -ROOM.size.z / 2]} receiveShadow material={mats.plaster}>
         <boxGeometry args={[ROOM.size.x, 2.7, 0.14]} />
       </mesh>
@@ -104,9 +221,8 @@ export function LivingRoom() {
       <mesh position={[ROOM.size.x / 2, 1.35, 0]} receiveShadow material={mats.plaster}>
         <boxGeometry args={[0.14, 2.7, ROOM.size.z]} />
       </mesh>
-      <mesh position={[0, 2.7, 0]}>
+      <mesh position={[0, 2.7, 0]} material={mats.plaster}>
         <boxGeometry args={[ROOM.size.x, 0.1, ROOM.size.z]} />
-        <meshStandardMaterial color="#f6eedd" roughness={0.95} />
       </mesh>
       {[
         [0, 0.09, -ROOM.size.z / 2 + 0.09, ROOM.size.x, 0.18, 0.05],
@@ -118,8 +234,18 @@ export function LivingRoom() {
           <boxGeometry args={[w, h, d]} />
         </mesh>
       ))}
+      {[
+        [0, 2.6, -ROOM.size.z / 2 + 0.08, ROOM.size.x, 0.09, 0.05],
+        [0, 2.6, ROOM.size.z / 2 - 0.08, ROOM.size.x, 0.09, 0.05],
+        [-ROOM.size.x / 2 + 0.08, 2.6, 0, 0.05, 0.09, ROOM.size.z],
+        [ROOM.size.x / 2 - 0.08, 2.6, 0, 0.05, 0.09, ROOM.size.z],
+      ].map(([x, y, z, w, h, d], i) => (
+        <mesh key={`crown-${i}`} position={[x, y, z]} material={mats.trim}>
+          <boxGeometry args={[w, h, d]} />
+        </mesh>
+      ))}
 
-      {/* --- Window with muntins, sky, and a sun patch on the floor --- */}
+      {/* --- Window with muntins, glass, curtains, sky, sun patch --- */}
       <group position={[ROOM.size.x / 2 - 0.1, 1.5, 0.15]}>
         <mesh material={mats.trim}>
           <boxGeometry args={[0.06, 1.8, 2.2]} />
@@ -127,6 +253,11 @@ export function LivingRoom() {
         <mesh position={[-0.045, 0, 0]}>
           <boxGeometry args={[0.03, 1.56, 1.96]} />
           <meshStandardMaterial color="#bfe0f4" emissive="#a8cfe8" emissiveIntensity={0.8} roughness={0.1} />
+        </mesh>
+        {/* Glass pane with real reflections. */}
+        <mesh position={[-0.028, 0, 0]}>
+          <boxGeometry args={[0.012, 1.56, 1.96]} />
+          <meshPhysicalMaterial color="#d8ecf6" transparent opacity={0.22} roughness={0.05} metalness={0} envMapIntensity={1.2} />
         </mesh>
         {[-0.49, 0, 0.49].map((z) => (
           <mesh key={z} position={[-0.05, 0, z]} material={mats.trim}>
@@ -139,11 +270,29 @@ export function LivingRoom() {
         <mesh position={[-0.08, -0.95, 0]} material={mats.trim}>
           <boxGeometry args={[0.14, 0.05, 2.3]} />
         </mesh>
+        {/* Curtain rod and panels. */}
+        <mesh position={[-0.18, 1.02, 0]} rotation={[Math.PI / 2, 0, 0]} material={mats.darkWood}>
+          <cylinderGeometry args={[0.018, 0.018, 2.6, 10]} />
+        </mesh>
+        <Curtain position={[-0.18, 0.12, -1.12]} material={mats.curtain} />
+        <Curtain position={[-0.18, 0.12, 1.12]} material={mats.curtain} flip />
       </group>
       <mesh position={[2.95, 0.034, 0.2]} rotation={[-Math.PI / 2, 0, 0.12]}>
         <planeGeometry args={[1.7, 2.3]} />
         <meshStandardMaterial color="#ffdf94" transparent opacity={0.3} depthWrite={false} />
       </mesh>
+
+      {/* --- Contact shadows grounding the furniture --- */}
+      <AoBlob position={[0.2, 0.033, 2.42]} size={[3.3, 1.6]} opacity={0.6} />
+      <AoBlob position={[-2.4, 0.033, 0.85]} size={[1.5, 1.5]} opacity={0.55} />
+      <AoBlob position={[0.25, 0.033, 0.8]} size={[1.8, 1.2]} opacity={0.5} />
+      <AoBlob position={[-0.05, 0.033, -2.95]} size={[2.1, 0.9]} opacity={0.55} />
+      <AoBlob position={[-3.65, 0.033, -0.15]} size={[1.2, 0.8]} opacity={0.55} />
+      <AoBlob position={[-3.0, 0.033, -1.5]} size={[0.6, 0.6]} opacity={0.5} />
+      <AoBlob position={[-3.3, 0.033, -2.2]} size={[1.1, 1.1]} opacity={0.55} />
+      <AoBlob position={[-2.55, 0.033, -0.35]} size={[0.55, 0.55]} opacity={0.45} />
+      <AoBlob position={[ROOM.food[0], 0.033, ROOM.food[2]]} size={[0.75, 0.55]} opacity={0.4} />
+      <AoBlob position={[ROOM.litter[0], 0.033, ROOM.litter[2]]} size={[0.95, 0.75]} opacity={0.4} />
 
       {/* --- Sofa: base, arms, back, seat + back cushions, throw pillows --- */}
       <group position={[0.2, 0, 2.42]}>
@@ -163,6 +312,9 @@ export function LivingRoom() {
         <RoundedBox args={[0.36, 0.36, 0.12]} radius={0.06} smoothness={3} position={[1.02, 0.68, 0.22]} rotation={[-0.2, 0, -0.3]} castShadow>
           <meshStandardMaterial map={fabricTexture("#d8c4a0", "pillow2", 27)} roughness={0.97} />
         </RoundedBox>
+        {/* Throw blanket draped over the left arm. */}
+        <RoundedBox args={[0.34, 0.05, 0.8]} radius={0.02} smoothness={2} position={[-1.25, 0.74, -0.05]} rotation={[0, 0.06, 0]} castShadow material={mats.blanket} />
+        <RoundedBox args={[0.34, 0.5, 0.05]} radius={0.02} smoothness={2} position={[-1.25, 0.5, -0.44]} rotation={[0.04, 0, 0]} castShadow material={mats.blanket} />
       </group>
 
       {/* --- Armchair --- */}
@@ -208,7 +360,7 @@ export function LivingRoom() {
           </RoundedBox>
           <mesh position={[0, 0, 0.028]}>
             <planeGeometry args={[1.22, 0.66]} />
-            <meshStandardMaterial color="#20344a" emissive="#33507a" emissiveIntensity={0.5} roughness={0.15} metalness={0.3} />
+            <meshPhysicalMaterial color="#20344a" emissive="#33507a" emissiveIntensity={0.5} roughness={0.12} metalness={0.3} clearcoat={0.8} clearcoatRoughness={0.1} envMapIntensity={1.1} />
           </mesh>
           <mesh position={[0, -0.45, -0.04]} material={mats.darkWood}>
             <boxGeometry args={[0.3, 0.16, 0.06]} />
@@ -334,10 +486,16 @@ export function LivingRoom() {
         <mesh userData={{ care: "food" }} castShadow material={mats.ceramic}>
           <cylinderGeometry args={[0.14, 0.17, 0.07, 24]} />
         </mesh>
-        <mesh position={[0, 0.026, 0]} userData={{ care: "food" }}>
+        <mesh position={[0, 0.026, 0]} userData={{ care: "food" }} material={foodBowl > 8 ? mats.kibble : mats.ceramic}>
           <cylinderGeometry args={[0.11, 0.11, 0.032, 20]} />
-          <meshStandardMaterial color={foodBowl > 8 ? "#6b4a28" : "#d8d0c2"} roughness={0.7} />
         </mesh>
+        {/* Individual kibble bits when the bowl is full. */}
+        {foodBowl > 8 &&
+          kibbles.map((k, i) => (
+            <mesh key={i} position={k.position} rotation={[0, k.rot, 0]} scale={k.scale} material={mats.kibble} userData={{ care: "food" }}>
+              <sphereGeometry args={[0.011, 8, 6]} />
+            </mesh>
+          ))}
         {/* Kibble bag */}
         <group position={[0.36, 0, 0.04]} userData={{ care: "food" }}>
           <RoundedBox args={[0.2, 0.3, 0.12]} radius={0.02} smoothness={2} position={[0, 0.15, 0]} castShadow userData={{ care: "food" }}>
@@ -352,9 +510,8 @@ export function LivingRoom() {
 
       {/* --- Water bowl --- */}
       <group position={ROOM.water} userData={{ care: "water" }}>
-        <mesh userData={{ care: "water" }} castShadow>
+        <mesh userData={{ care: "water" }} castShadow material={mats.ceramic}>
           <cylinderGeometry args={[0.13, 0.16, 0.07, 24]} />
-          <meshStandardMaterial color="#c4d4de" roughness={0.25} metalness={0.25} />
         </mesh>
         <mesh position={[0, 0.026, 0]} userData={{ care: "water" }}>
           <cylinderGeometry args={[0.105, 0.105, 0.032, 20]} />
@@ -362,8 +519,9 @@ export function LivingRoom() {
             color={waterBowl > 8 ? "#5ea8cc" : "#c4d4de"}
             transparent
             opacity={waterBowl > 8 ? 0.75 : 1}
-            roughness={0.1}
-            clearcoat={0.6}
+            roughness={0.08}
+            clearcoat={0.7}
+            envMapIntensity={1.2}
           />
         </mesh>
       </group>
@@ -373,10 +531,15 @@ export function LivingRoom() {
         <RoundedBox args={[0.58, 0.14, 0.42]} radius={0.03} smoothness={2} position={[0, 0.06, 0]} castShadow userData={{ care: "litter" }}>
           <meshStandardMaterial color="#e8e0d0" roughness={0.6} />
         </RoundedBox>
-        <mesh position={[0, 0.115, 0]} userData={{ care: "litter" }}>
+        <mesh position={[0, 0.115, 0]} userData={{ care: "litter" }} material={mats.litter}>
           <boxGeometry args={[0.5, 0.04, 0.34]} />
-          <meshStandardMaterial color={litterDirt > 55 ? "#9a8458" : "#e0cd9c"} roughness={1} />
         </mesh>
+        {litterDirt > 55 && (
+          <mesh position={[0, 0.118, 0]} userData={{ care: "litter" }}>
+            <boxGeometry args={[0.5, 0.042, 0.34]} />
+            <meshStandardMaterial color="#9a8458" transparent opacity={0.55} roughness={1} />
+          </mesh>
+        )}
       </group>
     </group>
   );
