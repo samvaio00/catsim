@@ -43,8 +43,8 @@ export function CatCanvas() {
         }}
       >
         <color attach="background" args={["#8eb4d4"]} />
-        <LivingRoom />
         <Suspense fallback={null}>
+          <LivingRoom />
           <Singapura />
           <Physics gravity={[0, -9.6, 0]} interpolate>
             <Interactables />
