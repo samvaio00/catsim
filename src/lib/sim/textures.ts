@@ -265,20 +265,74 @@ export function furStrandTexture() {
   const rand = rng(123);
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 1500; i++) {
+  for (let i = 0; i < 2200; i++) {
     const x = rand() * 256;
     const y = rand() * 256;
-    const len = 3 + rand() * 7;
+    const len = 4 + rand() * 9;
     const a = rand() * Math.PI * 2;
     const v = 120 + Math.floor(rand() * 135);
     ctx.strokeStyle = `rgba(${v},${v},${v},${0.5 + rand() * 0.5})`;
-    ctx.lineWidth = 0.7 + rand() * 0.7;
+    ctx.lineWidth = 0.5 + rand() * 0.6;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+    ctx.quadraticCurveTo(
+      x + Math.cos(a) * len * 0.5 + (rand() - 0.5) * 2,
+      y + Math.sin(a) * len * 0.5 + (rand() - 0.5) * 2,
+      x + Math.cos(a) * len,
+      y + Math.sin(a) * len,
+    );
     ctx.stroke();
   }
   const tex = toTexture(canvas, 6, 6);
+  // Used as alphaMap / bumpMap — keep it linear, not sRGB.
+  tex.colorSpace = THREE.NoColorSpace;
+  cache.set(key, tex);
+  return tex;
+}
+
+/** Soft radial shadow blob used to fake ambient occlusion under furniture. */
+export function aoBlobTexture() {
+  const key = "aoBlob";
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const { canvas, ctx } = makeCanvas(256, 256);
+  const grad = ctx.createRadialGradient(128, 128, 20, 128, 128, 128);
+  grad.addColorStop(0, "rgba(0,0,0,0.55)");
+  grad.addColorStop(0.55, "rgba(0,0,0,0.28)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 256);
+  const tex = toTexture(canvas);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  cache.set(key, tex);
+  return tex;
+}
+
+/** Clumping clay litter: pale granules with darker speckles. */
+export function litterTexture() {
+  const key = "litter";
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const { canvas, ctx } = makeCanvas(256, 256);
+  const rand = rng(301);
+  ctx.fillStyle = "#dcc99a";
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 4200; i++) {
+    const tone = 150 + rand() * 90;
+    ctx.fillStyle = `rgba(${tone},${tone * 0.88},${tone * 0.62},${0.25 + rand() * 0.4})`;
+    const s = 0.8 + rand() * 2.2;
+    ctx.beginPath();
+    ctx.arc(rand() * 256, rand() * 256, s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (let i = 0; i < 500; i++) {
+    ctx.fillStyle = `rgba(120,96,58,${0.15 + rand() * 0.25})`;
+    ctx.beginPath();
+    ctx.arc(rand() * 256, rand() * 256, 0.7 + rand() * 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = toTexture(canvas, 2, 2);
   cache.set(key, tex);
   return tex;
 }
